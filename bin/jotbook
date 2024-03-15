@@ -1,0 +1,70 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+STDOUT.sync = true
+
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+
+require 'JotBook'
+require 'mercenary'
+require 'fileutils'
+
+Mercenary.program(:JotBook) do |p|
+  p.version JotBook::VERSION
+  p.description 'JotBook is a jot-aware, static site generator in Ruby'
+  p.syntax 'JotBook <subcommand> [options]'
+
+  def self.preserve_source_location?(path)
+    !Dir["#{path}/**/*"].empty?
+  end
+
+  def create_blank_site(path)
+    Dir.chdir(path) do
+      FileUtils.mkdir(%w(_layouts _jotes _drafts _plugins _site))
+      FileUtils.touch("index.html")
+    end
+    FileUtils.copy_entry('../template/jot_plug.rb', path + '/_plugins' + '/jot_plug.rb')
+  end
+
+
+  p.command(:new) do |c|
+    c.syntax 'new PATH'
+    c.description 'Creates a new JotBook site scaffold in PATH'
+    c.action do |args, _|
+      raise ArgumentError, 'You must specify a path.' if args.empty?
+
+      new_blog_path = File.expand_path(args.join(' '), Dir.pwd)
+      FileUtils.mkdir_p new_blog_path
+      if preserve_source_location? new_blog_path
+        raise ArgumentError "Conflict: #{new_blog_path} exists and is not empty."
+      end
+
+      create_blank_site new_blog_path
+    end
+  end
+
+  p.command(:build) do |c|
+    c.syntax "build [options]"
+    c.description "Builds your JotBook site"
+    c.option 'destination', '--dest DIR', 'To where the compiled files should be written'
+
+    c.action do |_, options|
+      FileUtils.mkdir_p options['destination'] if options['destination']
+      JotBook::Build.process(options['destination'])
+    end
+  end
+
+  p.command(:serve) do |c|
+    c.syntax "serve [options]"
+    c.description "Serve your JotBook site"
+    c.option 'port', '--port ip', 'To where the compiled files should be written'
+    c.action do |_, options|
+      system "ruby -run -e httpd './_site/' -p #{options['port'].to_i}"
+    end
+  end
+
+  p.default_command(:build)
+
+end
+
+      # Jekyll::Commands::Build.process(options)
